@@ -12,8 +12,6 @@ app.use(express.json())
 
 connectDB()
 
-let refreshTokens = [] //store in database
-
 app.post('/signup', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -32,7 +30,7 @@ app.post('/signup', async (req, res) => {
 })
 
 app.post('/login', authenticateUser, async (req, res) => {
-    const user = {name: req.body.username}
+    const user = {userId: req.user.userId, name: req.body.username}
 
     const accessToken = generateAccessToken(user)
     const refreshToken = jwt.sign(user, process.env.REFRESH_TOKEN_SECRET)
@@ -65,7 +63,7 @@ app.post('/refreshToken', async (req, res) => {
                 return res.status(403).send('Invalid sign')
             }
 
-        const accessToken = generateAccessToken({ name: user.name})
+        const accessToken = generateAccessToken({userId: user.userId ,name: user.name})
         res.json({ accessToken: accessToken })
         })
     } catch (error) {
@@ -94,6 +92,7 @@ async function authenticateUser(req, res, next) {
         }
 
         if (await bcrypt.compare(password, user.password)) {
+            req.user = { userId: user.userId, username: user.username }
             next();
         } else {
             res.status(403).send('Invalid password');
@@ -105,6 +104,28 @@ async function authenticateUser(req, res, next) {
 
 function generateAccessToken(user) {
     return jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1m'})
+}
+
+app.get('/protected', authenticateToken, (req, res) => {
+    res.json({ userId: req.user.userId, username: req.user.name})
+})
+
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization']
+    const token = authHeader && authHeader.split(' ')[1]
+    
+    if (token == null) {
+        return res.sendStatus(401).send('No token provided')
+    }
+
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, user) => {
+        if (error) {
+            return res.sendStatus(403).send('Invalid token')
+        }
+
+        req.user = user
+        next()
+    })
 }
 
 app.listen(4000);
