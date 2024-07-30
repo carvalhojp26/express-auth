@@ -30,7 +30,7 @@ app.post('/signup', async (req, res) => {
 })
 
 app.post('/login', authenticateUser, async (req, res) => {
-    const user = {userId: req.user.userId, name: req.body.username}
+    const user = { userId: req.user.userId, name: req.body.username }
 
     const accessToken = generateAccessToken(user)
     const refreshToken = jwt.sign(user, process.env.REFRESH_TOKEN_SECRET)
@@ -63,12 +63,12 @@ app.post('/refreshToken', async (req, res) => {
                 return res.status(403).send('Invalid sign')
             }
 
-        const accessToken = generateAccessToken({userId: user.userId ,name: user.name})
+        const accessToken = generateAccessToken({userId: user.userId, name: user.name})
         res.json({ accessToken: accessToken })
         })
     } catch (error) {
         res.status(500).send({ message: 'Server error', error: error.message})
-    }
+    }   
 })
 
 app.delete('/logout', async (req, res) => {
@@ -130,3 +130,6 @@ function authenticateToken(req, res, next) {
 
 app.listen(4000);
 console.log('Server listening on port 4000');
+
+//Ajustar payload ao gerar token por refreshToken
+//Ajustar arquiterura
