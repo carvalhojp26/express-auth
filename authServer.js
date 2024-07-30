@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const User = require('./models/Users');
 const connectDB = require('./database');
+const Token = require('./models/Token')
 
 app.use(express.json())
 
@@ -26,50 +27,61 @@ app.post('/signup', async (req, res) => {
         await newUser.save()
         res.status(201).send('User created successfully')
     } catch(error) {
-        res.status(500).send({ message: 'fudeu aqui', error: error.message})
+        res.status(500).send({ message: 'Server Error', error: error.message})
     }
 })
 
-app.post('/login', authenticateUser, (req, res) => {
-    const username = req.body.username
-    const user = {name: username}
+app.post('/login', authenticateUser, async (req, res) => {
+    const user = {name: req.body.username}
 
     const accessToken = generateAccessToken(user)
     const refreshToken = jwt.sign(user, process.env.REFRESH_TOKEN_SECRET)
-    refreshTokens.push(refreshToken)
-    res.json({ accessToken: accessToken, refreshToken: refreshToken})
+
+    try{
+        const newToken = new Token({ token: refreshToken })
+        await newToken.save()
+        res.json({ accessToken: accessToken, refreshToken: refreshToken})
+    } catch (error) {
+        res.status(500).send({ message: 'Failed to save token', error: error.message})
+    }
 })
 
-app.delete('/logout', (req, res) => {
-    //delete from database
-
-    refreshTokens = refreshTokens.filter(token => token !== req.body.token)
-    res.sendStatus(204)
-})
-
-
-app.post('/token', (req, res) => {
+app.post('/refreshToken', async (req, res) => {
     const refreshToken = req.body.token
     
     if (refreshToken == null) {
         return res.sendStatus(401)
     }
     
-    if (!refreshTokens.includes(refreshToken)) {
-        console.log("token not included in array")
-        return res.sendStatus(403)
-    }
-    
-    jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (error, user) => {
-        if (error) {
-            console.log("invalid sign")
-            return res.sendStatus(403)
+    try {
+        const dbToken = await Token.findOne({ token: refreshToken })
+
+        if (!dbToken) {
+            return res.status(403).send('Inexistent token')
         }
-        
-        const accessToken = generateAccessToken({ name: user.name })
-        res.json({ accessToken: accessToken})
-    })
-    
+
+        jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (error, user) => {
+            if (error) {
+                return res.status(403).send('Invalid sign')
+            }
+
+        const accessToken = generateAccessToken({ name: user.name})
+        res.json({ accessToken: accessToken })
+        })
+    } catch (error) {
+        res.status(500).send({ message: 'Server error', error: error.message})
+    }
+})
+
+app.delete('/logout', async (req, res) => {
+    const token = req.body.token;
+
+    try {
+        await Token.findOneAndDelete({ token: token})
+        res.status(204).send('Token deleted successfully')
+    } catch (error) {
+        res.status(500).send({ message: 'Failed to delete token', error: error.message })
+    }
 })
 
 async function authenticateUser(req, res, next) {
